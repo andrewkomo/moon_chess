@@ -1,0 +1,1 @@
+The first fully decentralized P2E chess game.
