@@ -46,21 +46,145 @@ impl Hash for GameState {
 }
 
 impl GameState {
-    fn is_checkmate(&self) -> bool {
-        // Check if the non-active color is in checkmate
-        // Assume check
-        true
-    }
-
     fn is_check(&self, white: bool) -> bool {
         // Check if white/black is in check
-        true
+        
+        // Find the right color king
+        let mut king_rank: usize = 8;
+        let mut king_col: usize = 8;
+        'outer: for i in 0..8 {
+            for j in 0..8 {
+                // Check that location is not empty, not a king, and is the right color
+                if (self.piece_board[i][j] == Pieces::K) && (self.white_board[i][j] == white) {
+                    king_rank = i;
+                    king_col = j;
+                    break 'outer;
+                }
+            }
+        }
+
+        // Diagonal
+        for move_up in [false,true] {
+            for move_right in [false,true] {
+                for i in 1..8 {
+                    if (move_up && (king_rank + i > 7)) || (!move_up && (king_rank < i)) {
+                        break;
+                    }
+                    let new_rank = {
+                        if move_up {
+                            king_rank + i
+                        } else {
+                            king_rank - i
+                        }
+                    };
+                    if (move_right && (king_col + i > 7)) || (!move_right && (king_col < i)) {
+                        break;
+                    }
+                    let new_col = {
+                        if move_right {
+                            king_col + i
+                        } else {
+                            king_col - i
+                        }
+                    };
+                    if self.piece_board[new_rank][new_col] != Pieces::Empty {
+                        if self.white_board[new_rank][new_col] == white {
+                            break;
+                        } else {
+                            match self.piece_board[new_rank][new_col] {
+                                Pieces::B|Pieces::Q|Pieces::K => return true,
+                                Pieces::P => {
+                                    if (i==1) && (move_up != white) {
+                                        return true;
+                                    } else {
+                                        break;
+                                    }
+                                }
+                                _ => break,
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // Straight-line
+        for move_up_down in [false,true] {
+            for move_pos in [false,true] {
+                for i in 1..8 {
+                    let mut new_rank = king_rank;
+                    let mut new_col = king_col;
+                    if move_up_down {
+                        if (move_pos && (king_rank + i > 7)) || (!move_pos && (king_rank < i)) {
+                            break;
+                        }
+                        new_rank = {
+                            if move_pos {
+                                king_rank + i
+                            } else {
+                                king_rank - i
+                            }
+                        }; 
+                    } else {
+                        if (move_pos && (king_col + i > 7)) || (!move_pos && (king_col < i)) {
+                            break;
+                        }
+                        new_col = {
+                            if move_pos {
+                                king_col + i
+                            } else {
+                                king_col - i
+                            }
+                        };
+                    }
+                    if self.piece_board[new_rank][new_col] != Pieces::Empty {
+                        if self.white_board[new_rank][new_col] == white {
+                            break;
+                        } else {
+                            match self.piece_board[new_rank][new_col] {
+                                Pieces::R|Pieces::Q|Pieces::K => return true,
+                                _ => break,
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // Knight moves
+        for rank_change in [1,2] {
+            for rank_pos in [false,true] {
+                if (rank_pos && (king_rank + rank_change > 7)) || (!rank_pos && (king_rank < rank_change)) {
+                    break;
+                }
+                let new_rank = {
+                    if rank_pos {
+                        king_rank + rank_change
+                    } else {
+                        king_rank - rank_change
+                    }
+                };
+                for col_pos in [false,true] {
+                    let col_change = rank_change % 2 + 1;
+                    if (col_pos && (king_col + col_change > 7)) || (!col_pos && (king_col < col_change)) {
+                        break;
+                    }
+                    let new_col = {
+                        if col_pos {
+                            king_col + col_change
+                        } else {
+                            king_col - col_change
+                        }
+                    };
+                    if (self.piece_board[new_rank][new_col] == Pieces::N) && (self.white_board[new_rank][new_col] != white) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
     
-    fn is_stalemate(&self) -> bool {
-        // Assume not check
-    
-        // For each piece see if there is a valid move
+    fn has_valid_move(&self) -> bool {    
+        // For non-active color, see if any piece has a valid move
         true
     }
 
@@ -75,7 +199,6 @@ impl GameState {
         let mut black_light_bishop = false;
         let mut black_dark_bishop = false;
         let mut black_knight = false;
-        let mut other_piece = false; // Not king, bishop, or knight
         for i in 0..8 {
             for j in 0..8 {
                 if self.piece_board[i][j] == Pieces::N { // knights
@@ -99,33 +222,25 @@ impl GameState {
                         }
                     }
                 } else if (self.piece_board[i][j] != Pieces::Empty) && 
-                    (self.piece_board[i][j] != Pieces::K) {
-                    other_piece = true;
+                    (self.piece_board[i][j] != Pieces::K) { // Not king, bishop, or knight
+                    return false;
                 }
             }
         }
-    
-        if other_piece {
-            return false
-        }
-        if white_knight {
-            if white_light_bishop || white_dark_bishop || 
-                black_knight ||black_light_bishop || black_dark_bishop {
-                return false;
-            }
-        }
-        if black_knight {
-            if white_knight || white_light_bishop || white_dark_bishop || 
-                black_light_bishop || black_dark_bishop {
-                return false;
-            }
-        }
-        if white_light_bishop && black_dark_bishop {
+        // Knight and other piece
+        if white_knight && (white_light_bishop || white_dark_bishop || 
+            black_knight ||black_light_bishop || black_dark_bishop) {
             return false;
         }
-        if white_dark_bishop && black_light_bishop {
+        if black_knight && (white_knight || white_light_bishop || white_dark_bishop || 
+            black_light_bishop || black_dark_bishop) {
             return false;
         }
+        // Mismatched bishops
+        if (white_light_bishop && black_dark_bishop) || (white_dark_bishop && black_light_bishop) {
+            return false;
+        }
+
         return true;
     }
 
@@ -144,7 +259,6 @@ impl GameState {
         }
         return true;
     }
-
 }
 
 struct Turn {
@@ -158,14 +272,11 @@ struct Turn {
 const MAX_MOVES: usize = 500;
 const MAX_HALFMOVES: usize = 100; // 50 move rule
 
-fn in_board(rank: u8, col: u8) -> bool {
-    (rank < 8) && (col < 8)
-}
-
 fn is_valid(turn: &Turn, curr_game: &mut GameState) -> bool { // I think I'm doing the mut wrong
     // Checks if the move is valid and updates the board
+
     // Check if both coordinates are valid
-    if !(in_board(turn.from_rank,turn.from_col) && in_board(turn.to_rank,turn.to_col)) {
+    if (turn.from_rank >= 8) || (turn.from_col >= 8) || (turn.to_rank >= 8) || (turn.to_col >= 8) {
         return false;
     }
 
@@ -174,59 +285,143 @@ fn is_valid(turn: &Turn, curr_game: &mut GameState) -> bool { // I think I'm doi
         return false;
     }
 
-    // Check if piece at original location is right
+    // Recast rank and col as usize (needed for index)
     let from_rank: usize = turn.from_rank.into();
     let from_col: usize = turn.from_col.into();
+    let to_rank: usize = turn.to_rank.into();
+    let to_col: usize = turn.to_col.into();
+
+    // Check if piece at original location is right
     if (curr_game.piece_board[from_rank][from_col] != turn.piece) || 
         (curr_game.white_active != curr_game.white_board[from_rank][from_col]) {
         return false;
     }
 
     // Check no same color piece at final location
-    let to_rank: usize = turn.to_rank.into();
-    let to_col: usize = turn.to_col.into();
     if (curr_game.piece_board[to_rank][to_col] != Pieces::Empty) && 
         (curr_game.white_active == curr_game.white_board[to_rank][to_col]) {
         return false;
     }
 
-    // Update move counters
-    if turn.piece.is_pawn() || (curr_game.piece_board[to_rank][to_col] != Pieces::Empty) {
-        curr_game.half_moves = 0;
-    } else {
-        curr_game.half_moves += 1;
-    }
-    if !curr_game.white_active {
-        curr_game.full_moves += 1;
-    }
-
-    // Update castling rights
-    if ((turn.from_col == 0) && (turn.from_rank == 0)) ||
-        ((turn.to_col == 0) && (turn.to_rank == 0)) {
-        curr_game.white_castle_queen = false;
-    }
-    if ((turn.from_col == 7) && (turn.from_rank == 0)) ||
-        ((turn.to_col == 7) && (turn.to_rank == 0)) {
-        curr_game.white_castle_king = false;
-    }
-    if ((turn.from_col == 0) && (turn.from_rank == 7)) ||
-        ((turn.to_col == 0) && (turn.to_rank == 7)) {
-        curr_game.black_castle_queen = false;
-    }
-    if ((turn.from_col == 7) && (turn.from_rank == 7)) ||
-        ((turn.to_col == 7) && (turn.to_rank == 7)) {
-        curr_game.black_castle_king = false;
-    }
-
     // Check if piece can move to target square
-    if turn.piece.is_pawn()  { // Pawns first
-        // First check if valid promotion
-        // Then check forward movement
-        // Then captures/en passant
-    } else if turn.piece == Pieces::K { // King
-        // Handle castling separately (by moving the king square by square)
+    let rank_diff = cmp::max(from_rank,to_rank) - cmp::min(from_rank,to_rank);
+    let col_diff = cmp::max(from_col,to_col) - cmp::min(from_col,to_col);
+    if turn.piece.is_pawn()  {
+        // Check movement is valid
+        if (curr_game.white_active && to_rank < from_rank) || (!curr_game.white_active && to_rank > from_rank) {
+            return false;
+        }
+        if rank_diff != 1 && rank_diff != 2 {
+            return false;
+        }
+        if col_diff == 0 { // Going forward
+            if rank_diff == 2 && ((curr_game.white_active && to_rank != 3) || (!curr_game.white_active && to_rank != 4)) {
+                return false;
+            }
+            // Check the movement squares
+            for i in 1..=rank_diff {
+                let new_rank = {
+                    if curr_game.white_active {
+                        from_rank + i
+                    } else {
+                        from_rank - i
+                    }
+                };
+                if curr_game.piece_board[new_rank][from_col] != Pieces::Empty {
+                    return false;
+                }
+            }
+            // Update board
+            default_update(turn, curr_game);
+            if rank_diff == 2 {
+                curr_game.en_passant = {
+                    if curr_game.white_active {
+                        (turn.from_rank+1,turn.from_col)
+                    } else {
+                        (turn.from_rank-1,turn.from_col)
+                    }
+                };
+            }
+        } else if col_diff == 1 { // Capture/en passant
+            if rank_diff != 1 {
+                return false;
+            }
+            if curr_game.piece_board[to_rank][to_col] != Pieces::Empty && (turn.to_rank,turn.to_col) != curr_game.en_passant {
+                return false;
+            }
+            // Update board
+            default_update(turn, curr_game);
+        } else { // Invalid
+            return false;
+        }
 
-        // Update castling rights
+        // Handle promotions separately
+        if (curr_game.white_active && (to_rank == 7)) || (!curr_game.white_active && (to_rank == 0)) {
+            if turn.piece == Pieces::P {
+                return false;
+            }
+            // Update board
+            curr_game.piece_board[to_rank][to_col] = {
+                match turn.piece {
+                    Pieces::PToR => Pieces::R,
+                    Pieces::PToN => Pieces::N,
+                    Pieces::PToB => Pieces::B,
+                    Pieces::PToQ => Pieces::Q,
+                    _ => return false,
+                }
+            };
+        }
+        else if turn.piece != Pieces::P {
+            return false;
+        }
+    } else if turn.piece == Pieces::K {
+        if rank_diff > 1 || col_diff > 2 {
+            return false;
+        }
+        if col_diff == 2 { // Handle castling separately (by moving the king square by square)
+            if rank_diff != 0 {
+                return false; 
+            }
+            let mut end_rook_loc = from_col+1;
+            let mut start_rook_loc = 7;
+            if to_col == 6 { // King-side
+                if (curr_game.white_active && !curr_game.white_castle_king) || (!curr_game.white_active && !curr_game.black_castle_king) {
+                    return false;
+                }
+                for i in 1..=2 {
+                    if curr_game.piece_board[from_rank][from_col+i] != Pieces::Empty {
+                        return false;
+                    }
+                }
+            } else if to_col == 2 { // Queen-side
+                if (curr_game.white_active && !curr_game.white_castle_queen) || (!curr_game.white_active && !curr_game.black_castle_queen) {
+                    return false;
+                }
+                for i in 1..=3 {
+                    if curr_game.piece_board[from_rank][from_col-i] != Pieces::Empty {
+                        return false;
+                    }
+                }
+                end_rook_loc = from_col-1;
+                start_rook_loc = 0;
+            } else {
+                return false;
+            }
+            // Check the king does not move through check
+            curr_game.piece_board[from_rank][end_rook_loc] = Pieces::K;
+            curr_game.white_board[from_rank][end_rook_loc] = curr_game.white_active;
+            if curr_game.is_check(curr_game.white_active) {
+                return false;
+            }
+            default_update(turn,curr_game);
+            // Move the rook
+            curr_game.piece_board[from_rank][end_rook_loc] = Pieces::R;
+            curr_game.piece_board[from_rank][start_rook_loc] = Pieces::Empty;
+            curr_game.white_board[from_rank][start_rook_loc] = false;
+        } else { // Otherwise move king normally
+            default_update(turn,curr_game);
+        }
+        // Remove castling
         if curr_game.white_active {
             curr_game.white_castle_king = false;
             curr_game.white_castle_queen = false;
@@ -235,11 +430,9 @@ fn is_valid(turn: &Turn, curr_game: &mut GameState) -> bool { // I think I'm doi
             curr_game.black_castle_queen = false;
         }
     } else {
-        let rank_diff = cmp::max(turn.from_rank,turn.to_rank) - cmp::min(turn.from_rank,turn.to_rank);
-        let col_diff = cmp::max(turn.from_col,turn.to_col) - cmp::min(turn.from_col,turn.to_col);
         let rank_move: usize = {
             if turn.piece == Pieces::N || rank_diff == 0 {
-                rank_diff.into()
+                rank_diff
             } else {
                 1
             }
@@ -247,7 +440,7 @@ fn is_valid(turn: &Turn, curr_game: &mut GameState) -> bool { // I think I'm doi
         let rank_move_pos: bool = turn.from_rank < turn.to_rank;
         let col_move: usize = {
             if turn.piece == Pieces::N || col_diff == 0 {
-                col_diff.into()
+                col_diff
             } else {
                 1
             }
@@ -257,7 +450,7 @@ fn is_valid(turn: &Turn, curr_game: &mut GameState) -> bool { // I think I'm doi
             if turn.piece == Pieces::N {
                 1
             } else {
-                cmp::max(rank_diff,col_diff).into()
+                cmp::max(rank_diff,col_diff)
             }
         };
         if turn.piece == Pieces::R && (rank_diff != 0) && (col_diff != 0) {
@@ -295,24 +488,50 @@ fn is_valid(turn: &Turn, curr_game: &mut GameState) -> bool { // I think I'm doi
             }
         }
         // Update board
-        curr_game.piece_board[from_rank][from_col] = Pieces::Empty;
-        curr_game.white_board[from_rank][from_col] = false;
-        curr_game.piece_board[to_rank][to_col] = turn.piece;
-        curr_game.white_board[to_rank][to_col] = curr_game.white_active;
+        default_update(turn,curr_game);
     }
 
     // Check if check
     return !curr_game.is_check(curr_game.white_active);
 }
 
-fn is_capture(turn: Turn, curr_game: GameState) -> bool {
-    // Check if the move is a capture for 50 move rule
-    // Assume that the move is valid
+fn default_update(turn:&Turn, curr_game: &mut GameState) -> () {
+    let from_rank: usize = turn.from_rank.into();
+    let from_col: usize = turn.from_col.into();
     let to_rank: usize = turn.to_rank.into();
     let to_col: usize = turn.to_col.into();
-    curr_game.piece_board[to_rank][to_col] != Pieces::Empty
+    curr_game.piece_board[from_rank][from_col] = Pieces::Empty;
+    curr_game.white_board[from_rank][from_col] = false;
+    curr_game.piece_board[to_rank][to_col] = turn.piece;
+    curr_game.white_board[to_rank][to_col] = curr_game.white_active;
+    curr_game.en_passant = (8,8);
+
+    // Update move counters
+    if turn.piece.is_pawn() || (curr_game.piece_board[to_rank][to_col] != Pieces::Empty) {
+        curr_game.half_moves = 0;
+    } else {
+        curr_game.half_moves += 1;
+    }
+    if !curr_game.white_active {
+        curr_game.full_moves += 1;
+    }
+
+    // Update castling rights
+    if ((from_col == 0) && (from_rank == 0)) || ((to_col == 0) && (to_rank == 0)) {
+        curr_game.white_castle_queen = false;
+    }
+    if ((from_col == 7) && (from_rank == 0)) || ((to_col == 7) && (to_rank == 0)) {
+        curr_game.white_castle_king = false;
+    }
+    if ((from_col == 0) && (from_rank == 7)) || ((to_col == 0) && (to_rank == 7)) {
+        curr_game.black_castle_queen = false;
+    }
+    if ((from_col == 7) && (from_rank == 7)) || ((to_col == 7) && (to_rank == 7)) {
+        curr_game.black_castle_king = false;
+    }
 }
 
+#[derive(PartialEq)]
 enum GameCodes {
     Invalid,
     Valid,
@@ -329,38 +548,7 @@ enum GameCodes {
     DrawMaxMoves,
 }
 
-// const INVALID = 0;
-// const VALID = 1;
-// const WHITE_WIN_CHECKMATE = 10;
-// const WHITE_WIN_RESIGNATION = 11;
-// const WHITE_WIN_TIME = 12;
-// const BLACK_WIN_CHECKMATE = 20;
-// const BLACK_WIN_RESIGNATION = 21;
-// const BLACK_WIN_TIME = 22;
-// const DRAW_STALEMATE = 30;
-// const DRAW_INSUFFICIENT_MATERIAL = 31;
-// const DRAW_THREEFOLD_REPITITION = 32;
-// const DRAW_FIFTY_MOVES = 33;
-// const DRAW_AGREEMENT = 34;
-// const DRAW_MAX_MOVES = 35;
-
 fn generate_game_code(turns: [&Turn; MAX_MOVES*2], half_moves: usize) -> GameCodes {
-    // Game codes:
-    // 0 - Invalid
-    // 1 - Valid
-    // 10 - White wins (by checkmate)
-    // 11 - White wins (by resignation) -- not checked here
-    // 12 - White wins (by time) -- not checked here
-    // 20 - Black wins (by checkmate)
-    // 21 - Black wins (by resignation) -- not checked here
-    // 22 - Black wins (by time) -- not checked here
-    // 30 - Draw (stalemate)
-    // 31 - Draw (insufficient material)
-    // 32 - Draw (by threefold repitition)
-    // 33 - Draw (by 50 move rule) -- no choice to take
-    // 34 - Draw (by agreement) -- not checked here
-    // 35 - Draw (maximum number of moves)
-
     // Initiate Game
     let mut game_state = GameState {
         piece_board: [
@@ -398,16 +586,17 @@ fn generate_game_code(turns: [&Turn; MAX_MOVES*2], half_moves: usize) -> GameCod
         if !is_valid(turns[i],&mut game_state) {
             return GameCodes::Invalid;
         }
-
-        if game_state.is_checkmate() {
-            if game_state.white_active {
-                return GameCodes::WhiteWinCheckmate;
+        
+        if !game_state.has_valid_move() {
+            if game_state.is_check(!game_state.white_active) {
+                if game_state.white_active {
+                    return GameCodes::WhiteWinCheckmate;
+                } else {
+                    return GameCodes::BlackWinCheckmate;
+                }
             } else {
-                return GameCodes::BlackWinCheckmate;
+                return GameCodes::DrawStalemate;
             }
-        }
-        if game_state.is_stalemate() {
-            return GameCodes::DrawStalemate;
         }
         if game_state.is_insufficient_mat() {
             return GameCodes::DrawInsufficientMaterial;
@@ -421,6 +610,8 @@ fn generate_game_code(turns: [&Turn; MAX_MOVES*2], half_moves: usize) -> GameCod
 
         // Check not threefold rep
         // TODO
+
+        game_state.white_active = !game_state.white_active;
     }
     return GameCodes::Valid;
 }
@@ -435,13 +626,18 @@ fn main() {
     };
     let first_turn = Turn {
         piece: Pieces::P,
-        from_rank: 3,
+        from_rank: 1,
         from_col: 2,
         to_rank: 3,
-        to_col: 4,
+        to_col: 2,
     };
     let mut turns = [&default_turn; MAX_MOVES*2];
     turns[0] = &first_turn;
     println!("Here");
-    generate_game_code(turns, 1);
+    let code = generate_game_code(turns, 1);
+    match code {
+        GameCodes::Valid => println!("Valid"),
+        GameCodes::Invalid => println!("Invalid"),
+        _ => println!("Sad"),
+    };
 }
