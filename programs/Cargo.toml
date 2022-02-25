@@ -1,8 +1,20 @@
 [package]
-name = "programs"
+name = "chess-game"
 version = "0.1.0"
 edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "chess_game"
+
+[features]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+cpi = ["no-entrypoint"]
+default = []
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+anchor-lang = "0.22.0"
