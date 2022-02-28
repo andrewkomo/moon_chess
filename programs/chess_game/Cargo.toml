@@ -1,6 +1,7 @@
 [package]
 name = "chess-game"
 version = "0.1.0"
+description = "Created with Anchor"
 edition = "2021"
 
 [lib]
@@ -13,8 +14,6 @@ no-idl = []
 no-log-ix-name = []
 cpi = ["no-entrypoint"]
 default = []
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 anchor-lang = "0.22.0"

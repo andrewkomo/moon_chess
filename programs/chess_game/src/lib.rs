@@ -27,7 +27,7 @@ pub mod chess_game {
         };
         Ok(())
     }
-    pub fn play(ctx: Context<Play>, turn: Turn) -> Result<()> {
+    pub fn play(ctx: Context<Play>, turn: u16) -> Result<()> {
         let game = &mut ctx.accounts.game;
     
         require!(
@@ -64,7 +64,7 @@ pub mod chess_game {
 pub struct Game {
     white_player: Pubkey,          // 32
     black_player: Pubkey,          // 32
-    turns: [Turn; MAX_MOVES],      // 16*512 = 8192
+    turns: [u16; 256],             // 16*512 = 8192
     num_moves: u16, // half-moves  // 16
     status: GameCodes,             // 4
     white_draw_open: bool,         // 1
@@ -73,7 +73,7 @@ pub struct Game {
     black_time_left: u32, // sec   // 32
     white_bonus_time: u32, // sec  // 32
     black_bonus_time: u32, // sec  // 32
-    last_move: i64, // sec         // 32
+    last_move: i64, // sec         // 64
 }
 impl Default for Game {
     fn default() -> Game {
@@ -132,7 +132,7 @@ impl Game {
         }
         Ok(())
     }
-    fn play(&mut self, turn: Turn) -> Result<()> {
+    fn play(&mut self, turn: u16) -> Result<()> {
         if !self.is_active() {
             return err!(ChessError::GameAlreadyOver);
         }

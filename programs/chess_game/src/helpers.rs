@@ -31,7 +31,7 @@ impl Pieces {
 
 #[derive(PartialEq, AnchorSerialize, AnchorDeserialize, Default, Clone, Copy)]
 pub struct Turn {
-    turn: u16, // piece (4 bits) | from_rank (3) | from_col (3) | to_rank (3) | to_col (3)
+    pub turn: u16, // piece (4 bits) | from_rank (3) | from_col (3) | to_rank (3) | to_col (3)
 }
 impl Turn {
     pub fn piece(&self) -> Pieces {

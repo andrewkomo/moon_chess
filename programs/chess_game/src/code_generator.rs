@@ -5,7 +5,7 @@ use crate::helpers::{Pieces,Turn};
 use anchor_lang::prelude::*;
 
 const MAX_HALFMOVES: usize = 100; // 50 move rule
-pub const MAX_MOVES: usize = 256*2;
+pub const MAX_MOVES: usize = 128*2;
 
 fn try_update_board(turn: &Turn, curr_game: &mut GameState) -> bool {
     // Checks if the move is valid and updates the board
@@ -263,7 +263,7 @@ impl GameCodes {
     }
 }
 
-pub fn generate_game_code(turns: &[Turn; MAX_MOVES], half_moves: usize) -> GameCodes {
+pub fn generate_game_code(turns: &[u16; MAX_MOVES], half_moves: usize) -> GameCodes {
     // Initialize Game
     let mut game_state = GameState {
         piece_board: [
@@ -301,7 +301,7 @@ pub fn generate_game_code(turns: &[Turn; MAX_MOVES], half_moves: usize) -> GameC
     // Run through each move, checking game code and updating the board
     for i in 0..half_moves {
 
-        if !try_update_board(&turns[i],&mut game_state) {
+        if !try_update_board(&Turn {turn: turns[i]},&mut game_state) {
             return GameCodes::Invalid;
         }
         
