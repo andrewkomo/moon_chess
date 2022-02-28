@@ -7,13 +7,12 @@ use code_generator::{MAX_MOVES,GameCodes};
 use code_generator::generate_game_code;
 
 mod helpers;
-use helpers::{Turn};
 
 
 #[program]
 pub mod chess_game {
     use super::*;
-    pub fn setup_game(ctx: Context<SetupGame>, black_player: Pubkey, white_time: u32, black_time: u32, white_bonus: u32, black_bonus: u32) -> Result<()> {
+    pub fn setup_game(ctx: Context<SetupGame>, black_player: Pubkey, white_time: i64, black_time: i64, white_bonus: u32, black_bonus: u32) -> Result<()> {
         let game = &mut ctx.accounts.game;
         game.white_player = ctx.accounts.white_player.key();
         game.black_player = black_player;
@@ -57,6 +56,9 @@ pub mod chess_game {
     
         game.resign(ctx.accounts.player.key())
     }
+    pub fn claim_timeout(ctx: Context<Timeout>) -> Result<()> {
+        ctx.accounts.game.claim_timeout()
+    }
 }
 
 
@@ -69,8 +71,8 @@ pub struct Game {
     status: GameCodes,             // 4
     white_draw_open: bool,         // 1
     black_draw_open: bool,         // 1
-    white_time_left: u32, // sec   // 32
-    black_time_left: u32, // sec   // 32
+    white_time_left: i64, // sec   // 64
+    black_time_left: i64, // sec   // 64
     white_bonus_time: u32, // sec  // 32
     black_bonus_time: u32, // sec  // 32
     last_move: i64, // sec         // 64
@@ -96,6 +98,12 @@ impl Default for Game {
 impl Game {
     fn is_active(&self) -> bool {
         self.status == GameCodes::Active
+    }
+    fn is_timeout(&self, curr_time: i64) -> bool {
+        let is_white: bool = self.num_moves % 2 == 0;
+        let time_diff = curr_time - self.last_move;
+        (is_white && time_diff > self.white_time_left.into()) || 
+        (!is_white && time_diff > self.black_time_left.into())
     }
     fn current_player(&self) -> Pubkey {
         if self.num_moves % 2 == 0 {
@@ -136,17 +144,44 @@ impl Game {
         if !self.is_active() {
             return err!(ChessError::GameAlreadyOver);
         }
-        self.num_moves += 1;
-        let num_moves: usize = self.num_moves.into();
-        if num_moves >= MAX_MOVES {
-            self.status = GameCodes::DrawMaxMoves;
-            return Ok(());
+        let is_white: bool = self.num_moves % 2 == 0;
+        let curr_time = match Clock::get() {
+            Ok(clock) => clock.unix_timestamp,
+            Err(_e) => return Err(error!(ChessError::ClockError))
+        };
+        let time_diff = curr_time - self.last_move;
+        let game_code: GameCodes;
+        if self.is_timeout(curr_time) {
+            game_code = generate_game_code(&self.turns,self.num_moves.into(),true);
+        } else {
+            self.num_moves += 1;
+            let num_moves: usize = self.num_moves.into();
+            if num_moves >= MAX_MOVES {
+                self.status = GameCodes::DrawMaxMoves;
+                return Ok(());
+            }
+            self.turns[num_moves] = turn;
+            game_code = generate_game_code(&self.turns,num_moves,false);
         }
-        self.turns[num_moves] = turn;
-        let game_code = generate_game_code(&self.turns,num_moves);
         if game_code == GameCodes::Invalid {
             return err!(ChessError::InvalidMove);
         } else {
+            self.status = game_code;
+        }
+        if is_white {
+            self.white_time_left = self.white_time_left - time_diff + i64::from(self.white_bonus_time);
+        } else {
+            self.black_time_left = self.black_time_left - time_diff + i64::from(self.black_bonus_time);
+        }
+        Ok(())
+    }
+    fn claim_timeout(&mut self) -> Result<()> {
+        let curr_time = match Clock::get() {
+            Ok(clock) => clock.unix_timestamp,
+            Err(_e) => return Err(error!(ChessError::ClockError))
+        };
+        if self.is_timeout(curr_time) {
+            let game_code = generate_game_code(&self.turns,self.num_moves.into(),true);
             self.status = game_code;
         }
         Ok(())
@@ -182,6 +217,13 @@ pub struct Resign<'info> {
     #[account(mut)]
     pub game: Account<'info, Game>,
     pub player: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct Timeout<'info> {
+    #[account(mut)]
+    pub game: Account<'info, Game>,
+    pub reporter: Signer<'info>,
 }
 
 #[error_code]

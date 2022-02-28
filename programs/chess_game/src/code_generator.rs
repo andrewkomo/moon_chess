@@ -242,28 +242,28 @@ pub enum GameCodes {
 impl Default for GameCodes {
     fn default() -> Self { GameCodes::Active }
 }
-impl GameCodes {
-    fn is_draw(&self) -> bool {
-        match self {
-            Self::DrawStalemate|Self::DrawInsufficientMaterial|Self::DrawFiftyMoves|Self::DrawAgreement|Self::DrawMaxMoves => true,
-            _ => false
-        }
-    }
-    fn is_white_winner(&self) -> bool {
-        match self {
-            Self::WhiteWinCheckmate|Self::WhiteWinResignation|Self::WhiteWinTime => true,
-            _ => false
-        }
-    }
-    fn is_black_winner(&self) -> bool {
-        match self {
-            Self::BlackWinCheckmate|Self::BlackWinResignation|Self::BlackWinTime => true,
-            _ => false
-        }
-    }
-}
+// impl GameCodes {
+//     fn is_draw(&self) -> bool {
+//         match self {
+//             Self::DrawStalemate|Self::DrawInsufficientMaterial|Self::DrawFiftyMoves|Self::DrawAgreement|Self::DrawMaxMoves => true,
+//             _ => false
+//         }
+//     }
+//     fn is_white_winner(&self) -> bool {
+//         match self {
+//             Self::WhiteWinCheckmate|Self::WhiteWinResignation|Self::WhiteWinTime => true,
+//             _ => false
+//         }
+//     }
+//     fn is_black_winner(&self) -> bool {
+//         match self {
+//             Self::BlackWinCheckmate|Self::BlackWinResignation|Self::BlackWinTime => true,
+//             _ => false
+//         }
+//     }
+// }
 
-pub fn generate_game_code(turns: &[u16; MAX_MOVES], half_moves: usize) -> GameCodes {
+pub fn generate_game_code(turns: &[u16; MAX_MOVES], half_moves: usize, time_out: bool) -> GameCodes {
     // Initialize Game
     let mut game_state = GameState {
         piece_board: [
@@ -333,7 +333,19 @@ pub fn generate_game_code(turns: &[u16; MAX_MOVES], half_moves: usize) -> GameCo
 
         game_state.white_active = !game_state.white_active;
     }
-    return GameCodes::Active;
+    if time_out {
+        if game_state.only_king(!game_state.white_active) {
+            return GameCodes::DrawInsufficientMaterial;
+        } else {
+            if game_state.white_active {
+                return GameCodes::BlackWinTime;
+            } else {
+                return GameCodes::WhiteWinTime;
+            }
+        }
+    } else {
+        return GameCodes::Active;
+    }
 }
 
 // fn main() {

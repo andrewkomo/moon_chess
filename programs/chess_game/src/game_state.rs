@@ -252,7 +252,7 @@ impl GameState {
         return true;
     }
 
-    fn only_king(&self, is_white: bool) -> bool {
+    pub fn only_king(&self, is_white: bool) -> bool {
         // If a player flags, their opponent wins unless player only has a king on the board 
         // or above conds are met
         for i in 0..8 {
