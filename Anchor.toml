@@ -1,7 +1,7 @@
 [features]
 seeds = false
 [programs.localnet]
-moon_chess = "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"
+chess_game = "2G1pVxGS4p9jFFTVBVirZ2vdQMw22nKfbf6CupVEVZSg"
 
 [registry]
 url = "https://anchor.projectserum.com"

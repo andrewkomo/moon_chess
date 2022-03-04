@@ -1,8 +1,9 @@
 use anchor_lang::prelude::*;
-declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
+declare_id!("2G1pVxGS4p9jFFTVBVirZ2vdQMw22nKfbf6CupVEVZSg");
 
 mod code_generator;
 mod game_state;
+// use game_state::{GameState};
 use code_generator::{MAX_MOVES,GameCodes};
 use code_generator::generate_game_code;
 
@@ -66,7 +67,9 @@ pub mod chess_game {
 pub struct Game {
     white_player: Pubkey,          // 32
     black_player: Pubkey,          // 32
-    turns: [u16; 256],             // 16*512 = 8192
+    turns: [u16; MAX_MOVES],       // 16*512 = 8192
+    // past_states: [u32; MAX_MOVES], // 32*512 = 16384
+    // curr_state: GameState,
     num_moves: u16, // half-moves  // 16
     status: GameCodes,             // 4
     white_draw_open: bool,         // 1
@@ -76,6 +79,7 @@ pub struct Game {
     white_bonus_time: u32, // sec  // 32
     black_bonus_time: u32, // sec  // 32
     last_move: i64, // sec         // 64
+    test_var: u16,
 }
 impl Default for Game {
     fn default() -> Game {
@@ -83,6 +87,7 @@ impl Default for Game {
             white_player: Default::default(),
             black_player: Default::default(),
             turns: [Default::default(); MAX_MOVES],
+            // past_states: [0; MAX_MOVES],
             num_moves: 0,
             status: GameCodes::Active,
             white_draw_open: false,
@@ -92,6 +97,7 @@ impl Default for Game {
             white_bonus_time: 0,
             black_bonus_time: 0,
             last_move: 0,
+            test_var: 8,
         }
     }
 }
@@ -151,16 +157,17 @@ impl Game {
         };
         let time_diff = curr_time - self.last_move;
         let game_code: GameCodes;
+        let num_moves: usize = self.num_moves.into();
         if self.is_timeout(curr_time) {
-            game_code = generate_game_code(&self.turns,self.num_moves.into(),true);
+            game_code = generate_game_code(&self.turns,num_moves,true);
         } else {
             self.num_moves += 1;
-            let num_moves: usize = self.num_moves.into();
             if num_moves >= MAX_MOVES {
                 self.status = GameCodes::DrawMaxMoves;
                 return Ok(());
             }
             self.turns[num_moves] = turn;
+            msg!("{}",self.turns[num_moves]);
             game_code = generate_game_code(&self.turns,num_moves,false);
         }
         if game_code == GameCodes::Invalid {

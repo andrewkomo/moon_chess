@@ -161,7 +161,7 @@ impl GameState {
                     for act in acts {
                         if in_board(i,j,act.0,act.2,act.1,act.3) {
                             let test_rank = update_loc(i,act.0,act.2);
-                            let test_col = update_loc(i,act.1,act.3);
+                            let test_col = update_loc(j,act.1,act.3);
                             if piece == Pieces::P {
                                 if act.1 == 0 && self.piece_board[test_rank][test_col] != Pieces::Empty {
                                     continue;

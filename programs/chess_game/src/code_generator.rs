@@ -5,7 +5,7 @@ use crate::helpers::{Pieces,Turn};
 use anchor_lang::prelude::*;
 
 const MAX_HALFMOVES: usize = 100; // 50 move rule
-pub const MAX_MOVES: usize = 128*2;
+pub const MAX_MOVES: usize = 64*2;
 
 fn try_update_board(turn: &Turn, curr_game: &mut GameState) -> bool {
     // Checks if the move is valid and updates the board
@@ -224,8 +224,8 @@ fn default_update(turn: &Turn, curr_game: &mut GameState) -> () {
 
 #[derive(PartialEq, Eq, AnchorSerialize, AnchorDeserialize, Copy, Clone)]
 pub enum GameCodes {
-    Invalid,
     Active,
+    Invalid,
     WhiteWinCheckmate,
     WhiteWinResignation,
     WhiteWinTime,
