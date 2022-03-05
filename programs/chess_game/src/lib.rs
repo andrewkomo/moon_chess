@@ -3,9 +3,9 @@ declare_id!("2G1pVxGS4p9jFFTVBVirZ2vdQMw22nKfbf6CupVEVZSg");
 
 mod code_generator;
 mod game_state;
-// use game_state::{GameState};
-use code_generator::{MAX_MOVES,GameCodes};
-use code_generator::generate_game_code;
+use game_state::{GameState};
+use code_generator::{GameCodes};
+use code_generator::{active_game_code,timeout_game_code};
 
 mod helpers;
 
@@ -21,10 +21,13 @@ pub mod chess_game {
         game.black_time_left = black_time;
         game.white_bonus_time = white_bonus;
         game.black_bonus_time = black_bonus;
+        game.curr_board = GameState::default();
+        game.past_states[0] = game.curr_board.small_hash();
         game.last_move  = match Clock::get() {
             Ok(clock) => clock.unix_timestamp,
             Err(_e) => return Err(error!(ChessError::ClockError))
         };
+        msg!("{}",game.curr_board.white_active);
         Ok(())
     }
     pub fn play(ctx: Context<Play>, turn: u16) -> Result<()> {
@@ -67,9 +70,8 @@ pub mod chess_game {
 pub struct Game {
     white_player: Pubkey,          // 32
     black_player: Pubkey,          // 32
-    turns: [u16; MAX_MOVES],       // 16*512 = 8192
-    // past_states: [u32; MAX_MOVES], // 32*512 = 16384
-    // curr_state: GameState,
+    past_states: [u32; 128],       // 32*128 = 4096
+    curr_board: GameState,         // ~560
     num_moves: u16, // half-moves  // 16
     status: GameCodes,             // 4
     white_draw_open: bool,         // 1
@@ -79,15 +81,14 @@ pub struct Game {
     white_bonus_time: u32, // sec  // 32
     black_bonus_time: u32, // sec  // 32
     last_move: i64, // sec         // 64
-    test_var: u16,
 }
 impl Default for Game {
-    fn default() -> Game {
-        Game {
+    fn default() -> Self {
+        Self {
             white_player: Default::default(),
             black_player: Default::default(),
-            turns: [Default::default(); MAX_MOVES],
-            // past_states: [0; MAX_MOVES],
+            past_states: [0; 128],
+            curr_board: Default::default(),
             num_moves: 0,
             status: GameCodes::Active,
             white_draw_open: false,
@@ -97,7 +98,6 @@ impl Default for Game {
             white_bonus_time: 0,
             black_bonus_time: 0,
             last_move: 0,
-            test_var: 8,
         }
     }
 }
@@ -157,18 +157,17 @@ impl Game {
         };
         let time_diff = curr_time - self.last_move;
         let game_code: GameCodes;
-        let num_moves: usize = self.num_moves.into();
         if self.is_timeout(curr_time) {
-            game_code = generate_game_code(&self.turns,num_moves,true);
+            game_code = timeout_game_code(&self.curr_board);
         } else {
             self.num_moves += 1;
-            if num_moves >= MAX_MOVES {
+            let num_moves: usize = self.num_moves.into();
+            if num_moves >= self.past_states.len()-1 {
                 self.status = GameCodes::DrawMaxMoves;
                 return Ok(());
             }
-            self.turns[num_moves] = turn;
-            msg!("{}",self.turns[num_moves]);
-            game_code = generate_game_code(&self.turns,num_moves,false);
+            msg!("Turn #{}: {}",num_moves,turn);
+            game_code = active_game_code(&mut self.curr_board, turn, &mut self.past_states, num_moves);
         }
         if game_code == GameCodes::Invalid {
             return err!(ChessError::InvalidMove);
@@ -188,7 +187,7 @@ impl Game {
             Err(_e) => return Err(error!(ChessError::ClockError))
         };
         if self.is_timeout(curr_time) {
-            let game_code = generate_game_code(&self.turns,self.num_moves.into(),true);
+            let game_code = timeout_game_code(&self.curr_board);
             self.status = game_code;
         }
         Ok(())

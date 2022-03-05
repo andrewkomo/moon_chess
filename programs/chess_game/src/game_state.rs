@@ -1,20 +1,54 @@
 use std::hash::{Hash, Hasher};
+use std::collections::hash_map::DefaultHasher;
 use crate::helpers::Pieces;
+use anchor_lang::prelude::*;
 
 
-#[derive(Clone)]
+#[derive(Clone, AnchorSerialize, AnchorDeserialize)]
 pub struct GameState {
     pub piece_board: [[Pieces; 8]; 8],
     pub white_board: [[bool; 8]; 8],
-    pub en_passant: (usize, usize), // Set to (8,8) for none
+    pub en_passant: u8, // Set to 64 for none
     pub white_active: bool,
     pub white_castle_king: bool,
     pub white_castle_queen: bool,
     pub black_castle_king: bool,
     pub black_castle_queen: bool,
-    pub half_moves: u16, // Half moves since last pawn move or capture
+    pub half_moves: u8, // Half moves since last pawn move or capture
 }
-
+impl Default for GameState {
+    fn default() -> Self {
+        Self {
+            piece_board: [
+                [Pieces::R, Pieces::N, Pieces::B, Pieces::Q, Pieces::K, Pieces::B, Pieces::N, Pieces::R],
+                [Pieces::P; 8],
+                [Pieces::Empty; 8],
+                [Pieces::Empty; 8],
+                [Pieces::Empty; 8],
+                [Pieces::Empty; 8],
+                [Pieces::P; 8],
+                [Pieces::R, Pieces::N, Pieces::B, Pieces::Q, Pieces::K, Pieces::B, Pieces::N, Pieces::R]
+            ],
+            white_board: [
+                [true; 8],
+                [true; 8],
+                [false; 8],
+                [false; 8],
+                [false; 8],
+                [false; 8],
+                [false; 8],
+                [false; 8]
+            ],
+            en_passant: 64,
+            white_active: true,
+            white_castle_king: true,
+            white_castle_queen: true,
+            black_castle_king: true,
+            black_castle_queen: true,
+            half_moves: 0,
+        }
+    }
+}
 impl Hash for GameState {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.piece_board.hash(state);
@@ -168,7 +202,7 @@ impl GameState {
                                 } else if (
                                     self.piece_board[test_rank][test_col] == Pieces::Empty || 
                                     self.white_board[test_rank][test_col] == self.white_active
-                                ) && (test_rank,test_col) != self.en_passant {
+                                ) && test_rank*8+test_col != usize::from(self.en_passant) {
                                     continue;
                                 }
                             } else if self.piece_board[test_rank][test_col] != Pieces::Empty &&
@@ -266,6 +300,12 @@ impl GameState {
             }
         }
         return true;
+    }
+
+    pub fn small_hash(&self) -> u32 {
+        let mut s = DefaultHasher::new();
+        self.hash(&mut s);
+        (s.finish() >> 32).try_into().unwrap()
     }
 }
 

@@ -3,7 +3,7 @@ use std::cmp;
 use anchor_lang::prelude::*;
 
 
-#[derive(PartialEq, Hash, Clone, Copy)]
+#[derive(PartialEq, Hash, Clone, Copy, AnchorSerialize, AnchorDeserialize)]
 pub enum Pieces {
     Empty,
     R,

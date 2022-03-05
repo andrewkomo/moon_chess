@@ -1,11 +1,10 @@
-use std::collections::HashMap;
 use std::cmp;
 use crate::game_state::{update_loc,GameState};
 use crate::helpers::{Pieces,Turn};
 use anchor_lang::prelude::*;
 
-const MAX_HALFMOVES: usize = 100; // 50 move rule
-pub const MAX_MOVES: usize = 64*2;
+const MAX_HALFMOVES: u8 = 100; // 50 move rule
+// pub const MAX_MOVES: usize = 64*2;
 
 fn try_update_board(turn: &Turn, curr_game: &mut GameState) -> bool {
     // Checks if the move is valid and updates the board
@@ -56,19 +55,19 @@ fn try_update_board(turn: &Turn, curr_game: &mut GameState) -> bool {
             if rank_diff == 2 {
                 curr_game.en_passant = {
                     if curr_game.white_active {
-                        (from_rank+1,from_col)
+                        ((from_rank+1)*8+from_col).try_into().unwrap()
                     } else {
-                        (from_rank-1,from_col)
+                        ((from_rank-1)*8+from_col).try_into().unwrap()
                     }
                 };
             }
         } else { // Capture/en passant
             if (curr_game.piece_board[to_rank][to_col] != Pieces::Empty) && 
-                ((to_rank,to_col) != curr_game.en_passant) {
+                (to_rank*8+to_col != usize::from(curr_game.en_passant)) {
                 return false;
             }
             // Update board
-            if (to_rank,to_col) == curr_game.en_passant {
+            if to_rank*8+to_col == usize::from(curr_game.en_passant) {
                 if curr_game.white_active {
                     curr_game.piece_board[to_rank-1][to_col] = Pieces::Empty;
                 } else {
@@ -198,7 +197,7 @@ fn default_update(turn: &Turn, curr_game: &mut GameState) -> () {
     curr_game.white_board[from_rank][from_col] = false;
     curr_game.piece_board[to_rank][to_col] = turn.piece();
     curr_game.white_board[to_rank][to_col] = curr_game.white_active;
-    curr_game.en_passant = (8,8);
+    curr_game.en_passant = 64;
 
     // Update move counters
     if turn.piece().is_pawn() || (curr_game.piece_board[to_rank][to_col] != Pieces::Empty) {
@@ -263,88 +262,55 @@ impl Default for GameCodes {
 //     }
 // }
 
-pub fn generate_game_code(turns: &[u16; MAX_MOVES], half_moves: usize, time_out: bool) -> GameCodes {
-    // Initialize Game
-    let mut game_state = GameState {
-        piece_board: [
-            [Pieces::R, Pieces::N, Pieces::B, Pieces::Q, Pieces::K, Pieces::B, Pieces::N, Pieces::R],
-            [Pieces::P; 8],
-            [Pieces::Empty; 8],
-            [Pieces::Empty; 8],
-            [Pieces::Empty; 8],
-            [Pieces::Empty; 8],
-            [Pieces::P; 8],
-            [Pieces::R, Pieces::N, Pieces::B, Pieces::Q, Pieces::K, Pieces::B, Pieces::N, Pieces::R]
-        ],
-        white_board: [
-            [true; 8],
-            [true; 8],
-            [false; 8],
-            [false; 8],
-            [false; 8],
-            [false; 8],
-            [false; 8],
-            [false; 8]
-        ],
-        en_passant: (8,8),
-        white_active: true,
-        white_castle_king: true,
-        white_castle_queen: true,
-        black_castle_king: true,
-        black_castle_queen: true,
-        half_moves: 0,
-    };
-
-    let mut states = HashMap::new();
-    states.insert(game_state.clone(),1);
-
-    // Run through each move, checking game code and updating the board
-    for i in 0..half_moves {
-
-        if !try_update_board(&Turn {turn: turns[i]},&mut game_state) {
-            return GameCodes::Invalid;
-        }
-        
-        if !game_state.has_valid_move() {
-            if game_state.is_check(!game_state.white_active) {
-                if game_state.white_active {
-                    return GameCodes::WhiteWinCheckmate;
-                } else {
-                    return GameCodes::BlackWinCheckmate;
-                }
-            } else {
-                return GameCodes::DrawStalemate;
-            }
-        }
-        if game_state.is_insufficient_mat() {
-            return GameCodes::DrawInsufficientMaterial;
-        }
-        if usize::from(game_state.half_moves) >= MAX_HALFMOVES {
-            return GameCodes::DrawFiftyMoves;
-        }
-
-        if states.contains_key(&game_state) {
-            if states[&game_state] >= 2 {
-                return GameCodes::DrawRepetition;
-            } else {
-                states.insert(game_state.clone(),states[&game_state]+1);
-            }
-        }
-
-        game_state.white_active = !game_state.white_active;
+pub fn active_game_code(game_state: &mut GameState, turn: u16, 
+    past_states: &mut [u32; 128], num_moves: usize) -> GameCodes {
+    if !try_update_board(&Turn {turn: turn},game_state) {
+        return GameCodes::Invalid;
     }
-    if time_out {
-        if game_state.only_king(!game_state.white_active) {
-            return GameCodes::DrawInsufficientMaterial;
-        } else {
+    
+    if !game_state.has_valid_move() {
+        if game_state.is_check(!game_state.white_active) {
             if game_state.white_active {
-                return GameCodes::BlackWinTime;
+                return GameCodes::WhiteWinCheckmate;
             } else {
-                return GameCodes::WhiteWinTime;
+                return GameCodes::BlackWinCheckmate;
             }
+        } else {
+            return GameCodes::DrawStalemate;
         }
+    }
+    if game_state.is_insufficient_mat() {
+        return GameCodes::DrawInsufficientMaterial;
+    }
+    if game_state.half_moves >= MAX_HALFMOVES {
+        return GameCodes::DrawFiftyMoves;
+    }
+
+    let hash = game_state.small_hash();
+    let mut count = 0;
+    for i in 0..num_moves {
+        if hash == past_states[i] {
+            count += 1;
+        }
+    }
+    if count >= 2 {
+        return GameCodes::DrawRepetition;
     } else {
-        return GameCodes::Active;
+        past_states[num_moves] = hash;
+    }
+
+    game_state.white_active = !game_state.white_active;
+    return GameCodes::Active;
+}
+pub fn timeout_game_code(game_state: &GameState) -> GameCodes {
+    if game_state.only_king(!game_state.white_active) {
+        return GameCodes::DrawInsufficientMaterial;
+    } else {
+        if game_state.white_active {
+            return GameCodes::BlackWinTime;
+        } else {
+            return GameCodes::WhiteWinTime;
+        }
     }
 }
 
