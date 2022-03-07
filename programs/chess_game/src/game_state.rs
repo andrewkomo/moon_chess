@@ -215,7 +215,7 @@ impl GameState {
                             self.piece_board[test_rank][test_col] = piece;
                             self.white_board[test_rank][test_col] = !self.white_active;
                             self.piece_board[i][j] = Pieces::Empty;
-                            let is_check = self.is_check(self.white_active);
+                            let is_check = self.is_check(!self.white_active);
                             self.piece_board[i][j] = piece;
                             self.white_board[test_rank][test_col] = old_color;
                             self.piece_board[test_rank][test_col] = old_piece;

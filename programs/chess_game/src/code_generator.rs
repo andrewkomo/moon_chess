@@ -193,11 +193,6 @@ fn default_update(turn: &Turn, curr_game: &mut GameState) -> () {
     let from_col: usize = turn.from_col();
     let to_rank: usize = turn.to_rank();
     let to_col: usize = turn.to_col();
-    curr_game.piece_board[from_rank][from_col] = Pieces::Empty;
-    curr_game.white_board[from_rank][from_col] = false;
-    curr_game.piece_board[to_rank][to_col] = turn.piece();
-    curr_game.white_board[to_rank][to_col] = curr_game.white_active;
-    curr_game.en_passant = 64;
 
     // Update move counters
     if turn.piece().is_pawn() || (curr_game.piece_board[to_rank][to_col] != Pieces::Empty) {
@@ -205,6 +200,12 @@ fn default_update(turn: &Turn, curr_game: &mut GameState) -> () {
     } else {
         curr_game.half_moves += 1;
     }
+
+    curr_game.piece_board[from_rank][from_col] = Pieces::Empty;
+    curr_game.white_board[from_rank][from_col] = false;
+    curr_game.piece_board[to_rank][to_col] = turn.piece();
+    curr_game.white_board[to_rank][to_col] = curr_game.white_active;
+    curr_game.en_passant = 64;
 
     // Update castling rights
     if ((from_col == 0 || from_col == 4) && (from_rank == 0)) || ((to_col == 0) && (to_rank == 0)) {
@@ -269,6 +270,7 @@ pub fn active_game_code(game_state: &mut GameState, turn: u16,
     }
     
     if !game_state.has_valid_move() {
+        msg!("Here");
         if game_state.is_check(!game_state.white_active) {
             if game_state.white_active {
                 return GameCodes::WhiteWinCheckmate;
@@ -286,6 +288,8 @@ pub fn active_game_code(game_state: &mut GameState, turn: u16,
         return GameCodes::DrawFiftyMoves;
     }
 
+    game_state.white_active = !game_state.white_active;
+
     let hash = game_state.small_hash();
     let mut count = 0;
     for i in 0..num_moves {
@@ -299,7 +303,6 @@ pub fn active_game_code(game_state: &mut GameState, turn: u16,
         past_states[num_moves] = hash;
     }
 
-    game_state.white_active = !game_state.white_active;
     return GameCodes::Active;
 }
 pub fn timeout_game_code(game_state: &GameState) -> GameCodes {
