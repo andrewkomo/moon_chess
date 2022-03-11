@@ -1,7 +1,11 @@
 {
     "dependencies": {
-        "@project-serum/anchor": "^0.22.0"
+        "@metaplex/js": "^4.12.0",
+        "@project-serum/anchor": "^0.22.0",
+        "axios": "^0.26.1",
+        "seedrandom": "^3.0.5"
     },
+    "type": "module",
     "devDependencies": {
         "@types/mocha": "^9.0.0",
         "chai": "^4.3.4",
