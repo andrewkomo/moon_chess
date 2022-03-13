@@ -264,7 +264,7 @@ impl Default for GameCodes {
 // }
 
 pub fn active_game_code(game_state: &mut GameState, turn: u16, 
-    past_states: &mut [u32; 128], num_moves: usize) -> GameCodes {
+    past_states: &mut [u32; 256], num_moves: usize) -> GameCodes {
     if !try_update_board(&Turn {turn: turn},game_state) {
         return GameCodes::Invalid;
     }

@@ -14,7 +14,7 @@ mod helpers;
 pub mod chess_game {
     use super::*;
     pub fn setup_game(ctx: Context<SetupGame>, black_player: Pubkey, white_time: i64, black_time: i64, white_bonus: u32, black_bonus: u32) -> Result<()> {
-        let game = &mut ctx.accounts.game;
+        let game = &mut *ctx.accounts.game;
         game.white_player = ctx.accounts.white_player.key();
         game.black_player = black_player;
         game.white_time_left = white_time;
@@ -31,7 +31,7 @@ pub mod chess_game {
         Ok(())
     }
     pub fn play(ctx: Context<Play>, turn: u16) -> Result<()> {
-        let game = &mut ctx.accounts.game;
+        let game = &mut *ctx.accounts.game;
     
         require!(
             game.current_player() == ctx.accounts.player.key(),
@@ -41,7 +41,7 @@ pub mod chess_game {
         game.play(turn)
     }
     pub fn update_draw(ctx: Context<UpdateDraw>, is_draw: bool) -> Result<()> {
-        let game = &mut ctx.accounts.game;
+        let game = &mut *ctx.accounts.game;
     
         require!(
             game.is_player(ctx.accounts.player.key()),
@@ -51,7 +51,7 @@ pub mod chess_game {
         game.update_draw(ctx.accounts.player.key(), is_draw)
     }
     pub fn resign(ctx: Context<Resign>) -> Result<()> {
-        let game = &mut ctx.accounts.game;
+        let game = &mut *ctx.accounts.game;
     
         require!(
             game.is_player(ctx.accounts.player.key()),
@@ -61,7 +61,9 @@ pub mod chess_game {
         game.resign(ctx.accounts.player.key())
     }
     pub fn claim_timeout(ctx: Context<Timeout>) -> Result<()> {
-        ctx.accounts.game.claim_timeout()
+        let game = &mut *ctx.accounts.game;
+
+        game.claim_timeout()
     }
 }
 
@@ -70,7 +72,7 @@ pub mod chess_game {
 pub struct Game {
     white_player: Pubkey,          // 32
     black_player: Pubkey,          // 32
-    past_states: [u32; 128],       // 32*128 = 4096
+    past_states: [u32; 256],       // 32*128 = 4096
     curr_board: GameState,         // ~560
     num_moves: u16, // half-moves  // 16
     status: GameCodes,             // 4
@@ -87,7 +89,7 @@ impl Default for Game {
         Self {
             white_player: Default::default(),
             black_player: Default::default(),
-            past_states: [0; 128],
+            past_states: [0; 256],
             curr_board: Default::default(),
             num_moves: 0,
             status: GameCodes::Active,
@@ -197,7 +199,7 @@ impl Game {
 #[derive(Accounts)]
 pub struct SetupGame<'info> {
     #[account(init, payer = white_player)]
-    pub game: Account<'info, Game>,
+    pub game: Box<Account<'info, Game>>,
     #[account(mut)]
     pub white_player: Signer<'info>,
     pub system_program: Program<'info, System>
@@ -207,28 +209,28 @@ pub struct SetupGame<'info> {
 #[derive(Accounts)]
 pub struct Play<'info> {
     #[account(mut)]
-    pub game: Account<'info, Game>,
+    pub game: Box<Account<'info, Game>>,
     pub player: Signer<'info>,
 }
 
 #[derive(Accounts)]
 pub struct UpdateDraw<'info> {
     #[account(mut)]
-    pub game: Account<'info, Game>,
+    pub game: Box<Account<'info, Game>>,
     pub player: Signer<'info>,
 }
 
 #[derive(Accounts)]
 pub struct Resign<'info> {
     #[account(mut)]
-    pub game: Account<'info, Game>,
+    pub game: Box<Account<'info, Game>>,
     pub player: Signer<'info>,
 }
 
 #[derive(Accounts)]
 pub struct Timeout<'info> {
     #[account(mut)]
-    pub game: Account<'info, Game>,
+    pub game: Box<Account<'info, Game>>,
     pub reporter: Signer<'info>,
 }
 
