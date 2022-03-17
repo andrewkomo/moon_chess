@@ -13,9 +13,10 @@ mod helpers;
 #[program]
 pub mod chess_game {
     use super::*;
-    pub fn setup_game(ctx: Context<SetupGame>, black_player: Pubkey, white_time: i64, black_time: i64, white_bonus: u32, black_bonus: u32) -> Result<()> {
+    pub fn setup_game(ctx: Context<SetupGame>, white_player: Pubkey, black_player: Pubkey, white_time: i64, black_time: i64, white_bonus: u32, black_bonus: u32) -> Result<()> {
         let game = &mut *ctx.accounts.game;
-        game.white_player = ctx.accounts.white_player.key();
+        game.authority = ctx.accounts.authority.key();
+        game.white_player = white_player;
         game.black_player = black_player;
         game.white_time_left = white_time;
         game.black_time_left = black_time;
@@ -23,46 +24,24 @@ pub mod chess_game {
         game.black_bonus_time = black_bonus;
         game.curr_board = GameState::default();
         game.past_states[0] = game.curr_board.small_hash();
-        game.last_move  = match Clock::get() {
-            Ok(clock) => clock.unix_timestamp,
-            Err(_e) => return Err(error!(ChessError::ClockError))
-        };
+        game.last_move = Clock::get().unwrap().unix_timestamp;
         msg!("{}",game.curr_board.white_active);
         Ok(())
     }
     pub fn play(ctx: Context<Play>, turn: u16) -> Result<()> {
-        let game = &mut *ctx.accounts.game;
-    
-        require!(
-            game.current_player() == ctx.accounts.player.key(),
-            ChessError::NotPlayersTurn
-        );
-    
+        let game = &mut *ctx.accounts.game;    
         game.play(turn)
     }
-    pub fn update_draw(ctx: Context<UpdateDraw>, is_draw: bool) -> Result<()> {
+    pub fn update_draw(ctx: Context<UpdateDraw>, is_white: bool, is_draw: bool) -> Result<()> {
         let game = &mut *ctx.accounts.game;
-    
-        require!(
-            game.is_player(ctx.accounts.player.key()),
-            ChessError::NotValidPlayer
-        );
-    
-        game.update_draw(ctx.accounts.player.key(), is_draw)
+        game.update_draw(is_white, is_draw)
     }
-    pub fn resign(ctx: Context<Resign>) -> Result<()> {
+    pub fn resign(ctx: Context<Resign>, is_white: bool) -> Result<()> {
         let game = &mut *ctx.accounts.game;
-    
-        require!(
-            game.is_player(ctx.accounts.player.key()),
-            ChessError::NotValidPlayer
-        );
-    
-        game.resign(ctx.accounts.player.key())
+        game.resign(is_white)
     }
     pub fn claim_timeout(ctx: Context<Timeout>) -> Result<()> {
         let game = &mut *ctx.accounts.game;
-
         game.claim_timeout()
     }
 }
@@ -70,9 +49,10 @@ pub mod chess_game {
 
 #[account]
 pub struct Game {
+    authority: Pubkey,             // 32
     white_player: Pubkey,          // 32
     black_player: Pubkey,          // 32
-    past_states: [u32; 256],       // 32*128 = 4096
+    past_states: [u32; 256],       // 32*256 = 8192
     curr_board: GameState,         // ~560
     num_moves: u16, // half-moves  // 16
     status: GameCodes,             // 4
@@ -87,6 +67,7 @@ pub struct Game {
 impl Default for Game {
     fn default() -> Self {
         Self {
+            authority: Default::default(),
             white_player: Default::default(),
             black_player: Default::default(),
             past_states: [0; 256],
@@ -113,32 +94,22 @@ impl Game {
         (is_white && time_diff > self.white_time_left.into()) || 
         (!is_white && time_diff > self.black_time_left.into())
     }
-    fn current_player(&self) -> Pubkey {
-        if self.num_moves % 2 == 0 {
-            self.white_player
-        } else {
-            self.black_player
-        }
-    }
-    fn is_player(&self, player: Pubkey) -> bool {
-        (player == self.white_player) || (player == self.black_player)
-    }
-    fn resign(&mut self, player: Pubkey) -> Result<()> {
+    fn resign(&mut self, is_white: bool) -> Result<()> {
         if !self.is_active() {
             return err!(ChessError::GameAlreadyOver);
         }
-        if player == self.white_player {
+        if is_white {
             self.status = GameCodes::BlackWinResignation;
         } else {
             self.status = GameCodes::WhiteWinResignation;
         }
         Ok(())
     }
-    fn update_draw(&mut self, player: Pubkey, is_draw: bool) -> Result<()> {
+    fn update_draw(&mut self, is_white: bool, is_draw: bool) -> Result<()> {
         if !self.is_active() {
             return err!(ChessError::GameAlreadyOver);
         }
-        if player == self.white_player {
+        if is_white {
             self.white_draw_open = is_draw;
         } else {
             self.black_draw_open = is_draw;
@@ -153,10 +124,7 @@ impl Game {
             return err!(ChessError::GameAlreadyOver);
         }
         let is_white: bool = self.num_moves % 2 == 0;
-        let curr_time = match Clock::get() {
-            Ok(clock) => clock.unix_timestamp,
-            Err(_e) => return Err(error!(ChessError::ClockError))
-        };
+        let curr_time = Clock::get().unwrap().unix_timestamp;
         let time_diff = curr_time - self.last_move;
         let game_code: GameCodes;
         if self.is_timeout(curr_time) {
@@ -184,10 +152,7 @@ impl Game {
         Ok(())
     }
     fn claim_timeout(&mut self) -> Result<()> {
-        let curr_time = match Clock::get() {
-            Ok(clock) => clock.unix_timestamp,
-            Err(_e) => return Err(error!(ChessError::ClockError))
-        };
+        let curr_time = Clock::get().unwrap().unix_timestamp;
         if self.is_timeout(curr_time) {
             let game_code = timeout_game_code(&self.curr_board);
             self.status = game_code;
@@ -198,33 +163,33 @@ impl Game {
 
 #[derive(Accounts)]
 pub struct SetupGame<'info> {
-    #[account(init, payer = white_player)]
+    #[account(init, payer = authority)]
     pub game: Box<Account<'info, Game>>,
     #[account(mut)]
-    pub white_player: Signer<'info>,
+    pub authority: Signer<'info>,
     pub system_program: Program<'info, System>
 }
 
 
 #[derive(Accounts)]
 pub struct Play<'info> {
-    #[account(mut)]
+    #[account(mut, has_one = authority)]
     pub game: Box<Account<'info, Game>>,
-    pub player: Signer<'info>,
+    pub authority: Signer<'info>,
 }
 
 #[derive(Accounts)]
 pub struct UpdateDraw<'info> {
-    #[account(mut)]
+    #[account(mut, has_one = authority)]
     pub game: Box<Account<'info, Game>>,
-    pub player: Signer<'info>,
+    pub authority: Signer<'info>,
 }
 
 #[derive(Accounts)]
 pub struct Resign<'info> {
-    #[account(mut)]
+    #[account(mut, has_one = authority)]
     pub game: Box<Account<'info, Game>>,
-    pub player: Signer<'info>,
+    pub authority: Signer<'info>,
 }
 
 #[derive(Accounts)]
@@ -238,7 +203,4 @@ pub struct Timeout<'info> {
 pub enum ChessError {
     InvalidMove,
     GameAlreadyOver,
-    NotPlayersTurn,
-    NotValidPlayer,
-    ClockError,
 }
