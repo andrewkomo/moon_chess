@@ -1,6 +1,7 @@
 [features]
 seeds = false
 [programs.localnet]
+combine_boards = "C7sgpMEh78hmwz7Q5pUiaEQnFSZ1dW2NkYokkkxi7dTJ"
 chess_game = "2G1pVxGS4p9jFFTVBVirZ2vdQMw22nKfbf6CupVEVZSg"
 
 [registry]

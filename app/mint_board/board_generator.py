@@ -1,15 +1,13 @@
 from PIL import Image, ImageDraw, ImageFont
 import random
 import textwrap
+import hashlib
 
 SQUARE_DIM = 128
 LINE_WIDTH = 1
-MIN_NODE_SIDE = 1
-MAX_NODE_SIDE = 4
 BORDER_SIZE = 64
-COLOR_SHIFT = 0.3
 P_POCKMARK = 0.05
-ROYALTY_FEE = 250
+ROYALTY_FEE = 500
 TARGET_WALLET = "DhX4pf9j72hpkJPxmRVbfx8Rg95zczx4y8FLihoeGKeK"
 
 def border_shift(L):
@@ -27,7 +25,7 @@ def generate_gradient(color1, color2, length):
     base.paste(top, (0, 0), mask)
     return base
 
-def create_board(border_color,dark_color,light_color,dark_line,light_line,nodes_per_side,p_edge,border_style,save_path,number):
+def create_board(border_color,dark_color,light_color,dark_line,light_line,nodes_per_side,p_edge,border_style,save_path,number,description):
 
     if border_style == 0 or border_style == 1:
         im = Image.new(mode="RGB", size=(SQUARE_DIM*8+BORDER_SIZE*2, SQUARE_DIM*8+BORDER_SIZE*2),color=border_color)
@@ -77,9 +75,9 @@ def create_board(border_color,dark_color,light_color,dark_line,light_line,nodes_
     with open(f'{save_path}{number}.json','w') as f:
         f.write(textwrap.dedent(f'''
         {{
-            "name": "Moon Chessboard #{number+1}",
-            "symbol": "CHESS",
-            "description": "TBA",
+            "name": "ShaChessboard #{number+1}",
+            "symbol": "SHACHESS",
+            "description": "{description}",
             "seller_fee_basis_points": {ROYALTY_FEE},
             "image": "{number}.png",
             "attributes": [
@@ -88,7 +86,7 @@ def create_board(border_color,dark_color,light_color,dark_line,light_line,nodes_
                 {{"trait_type": "light-color", "value": {list(light_color)}}},
                 {{"trait_type": "dark-line", "value": {list(dark_line)}}},
                 {{"trait_type": "light-line", "value": {list(light_line)}}},
-                {{"trait_type": "nodes-per-side", "value": {list(nodes_per_side)}}},
+                {{"trait_type": "nodes-per-side", "value": {nodes_per_side}}},
                 {{"trait_type": "p-edge", "value": {p_edge}}},
                 {{"trait_type": "border-style", "value": {border_style}}}
             ],
@@ -98,21 +96,4 @@ def create_board(border_color,dark_color,light_color,dark_line,light_line,nodes_
             }}
         }}
         '''))
-
-border_colors = [(0,0,128),(128,0,0),(0,0,0),(120,80,50),(70,70,70)]
-dark_colors = [(0,0,0),(180,140,100),(125,75,140),(105,125,70),(140,160,175)]
-light_colors = [(255,255,255),(240,215,180),(190,180,200),(255,255,220),(220,225,230)]
-p_edge = 0.6
-
-for i in range(20):
-    dark_color = random.choice(dark_colors)
-    light_color = random.choice(light_colors)
-    border_color = random.choice(border_colors)
-
-    diff = [x-y for (x,y) in zip(light_color,dark_color)]
-    dark_line = tuple(int(COLOR_SHIFT*x+y) for (x,y) in zip(diff,dark_color))
-    light_line = tuple(int(y-COLOR_SHIFT*x) for (x,y) in zip(diff,dark_color))
-
-    nodes_per_side = random.randint(MIN_NODE_SIDE,MAX_NODE_SIDE)
-
-    create_board(border_color,dark_color,light_color,dark_line,light_line,nodes_per_side,p_edge,random.randint(0,2),'programs/mint_board/assets/',i)
+    return hashlib.md5(im.tobytes()).hexdigest()
